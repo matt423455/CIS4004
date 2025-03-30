@@ -17,11 +17,11 @@ db_config = {
 }
 
 # --- Microsoft Entra / MSAL configuration ---
-client_id     = '90098509-5ce0-43f6-8e87-f47ced06c710'  # Application (client) ID from Azure
-client_secret = '.ON8Q~zQ0dB1l1lH5K4~.3r176sb1nbEN1QrOcUA'  # Client secret from Azure
+client_id     = '4252cb8e-b486-475c-9163-5e0b679e47ea'  # Application (client) ID from Azure
+client_secret = '~d38Q~SpLtT-Tl4IBhfLR_HqNpqdkym6FUjZlcK.'  # Client secret from Azure
 tenant_id     = '5ba7dd49-7ac9-4955-b136-4f6f3b6d4709'  # Directory (tenant) ID from Azure
 authority     = f'https://login.microsoftonline.com/{tenant_id}'
-redirect_uri  = 'https://198.199.68.36:5000/getAToken'  # Must exactly match your Azure app settings
+redirect_uri  = 'https://www.triviaparadise.online/getAToken'  # Must exactly match your Azure app settings
 scope         = ['User.Read']  # Adjust scopes as needed
 
 # Initialize the MSAL confidential client
