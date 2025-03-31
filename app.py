@@ -96,10 +96,6 @@ def getAToken():
 
 @app.route('/select_quiz')
 def select_quiz():
-    """
-    Display a page or return JSON that lets the user pick Category & Difficulty.
-    For simplicity, we'll show them in a basic HTML form or return them as JSON.
-    """
 
     if 'user_id' not in session:
         return redirect(url_for('login'))
@@ -132,13 +128,6 @@ def select_quiz():
 
 @app.route('/start_quiz', methods=['POST'])
 def start_quiz():
-    """
-    User chooses the category & difficulty and we fetch questions from DB.
-    We'll randomly pick N questions or all questions in that category/difficulty.
-    Return them to the front-end so user can see them & answer.
-    
-    The 1-minute timer can be handled front-end, or via server logic if you prefer. 
-    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
@@ -193,11 +182,6 @@ def start_quiz():
 
 @app.route('/submit_answers', methods=['POST'])
 def submit_answers():
-    """
-    The front-end calls this once the user is done OR the 1-minute timer runs out.
-    We compare user’s answers to the correct ones (in session), calculate score,
-    update user’s high score in DB, and return the result.
-    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
