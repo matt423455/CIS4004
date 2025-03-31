@@ -166,24 +166,17 @@ def start_quiz():
     # For security, we don't want to send correct answers back in the same request.
     # We'll store them in the user session to compare later.
     # That said, if you have many concurrent quizzes, store them differently.
-    question_list = []
-    correct_answers_map = {}
-    
+    questions_for_client = []
     for q in questions_db:
-        q_id = q["id"]
-        question_list.append({
-            'id': q_id,
+        questions_for_client.append({
+            'id': q['id'],
             'question': q['question'],
+            'correct_answer': q['correct_answer']
         })
-        correct_answers_map[q_id] = q['correct_answer']
-    
-    # Store correct answers in session:
-    session['correct_answers'] = correct_answers_map
-    
-    # Return the question list to the front-end
+
     return jsonify({
-        'questions': question_list,
-        'message': f"Quiz started for category: {category}, difficulty: {difficulty}"
+        'message': f"Quiz started for category: {category}, difficulty: {difficulty}",
+        'questions': questions_for_client
     })
 
 @app.route('/submit_answers', methods=['POST'])
