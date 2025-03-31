@@ -131,9 +131,15 @@ def start_quiz():
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    data = request.json
-    category   = request.form.get('category')
-    difficulty = request.form.get('difficulty')
+    if request.content_type == 'application/json':
+        # Parse JSON
+        data = request.json
+        category   = data.get('category')
+        difficulty = data.get('difficulty')
+    else:
+        # Assume it's an HTML form
+        category   = request.form.get('category')
+        difficulty = request.form.get('difficulty')
     
     # For example, fetch 10 random questions from the DB
     try:
