@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>Select Quiz</title>
+</head>
+<body>
+    <h1>Select Quiz Category & Difficulty</h1>
+    <form action="{{ url_for('start_quiz') }}" method="POST">
+        <label for="category">Category:</label>
+        <select name="category" id="category">
+            {% for cat in categories %}
+            <option value="{{cat}}">{{cat}}</option>
+            {% endfor %}
+        </select>
+
+        <br><br>
+
+        <label for="difficulty">Difficulty:</label>
+        <select name="difficulty" id="difficulty">
+            {% for diff in difficulties %}
+            <option value="{{diff}}">{{diff}}</option>
+            {% endfor %}
+        </select>
+
+        <br><br>
+
+        <button type="submit">Start Quiz</button>
+    </form>
+</body>
+</html>
