@@ -120,11 +120,11 @@ def select_quiz():
         conn.close()
     
     # This example returns JSON, but you could also use a template
-    return jsonify({
-        'message': "Select a quiz category and difficulty",
-        'categories': categories,
-        'difficulties': difficulties
-    })
+    return render_template(
+        'select_quiz.html',
+        categories=categories,
+        difficulties=difficulties
+    )
 
 @app.route('/start_quiz', methods=['POST'])
 def start_quiz():
@@ -132,8 +132,8 @@ def start_quiz():
         return redirect(url_for('login'))
     
     data = request.json
-    category   = data.get('category')
-    difficulty = data.get('difficulty')
+    category   = request.form.get('category')
+    difficulty = request.form.get('difficulty')
     
     # For example, fetch 10 random questions from the DB
     try:
@@ -146,7 +146,7 @@ def start_quiz():
             WHERE category = %s
               AND difficulty = %s
             ORDER BY RAND()
-            LIMIT 10
+            LIMIT 20
         """
         cursor.execute(query, (category, difficulty))
         questions_db = cursor.fetchall()
@@ -228,7 +228,7 @@ def submit_answers():
         'message': "Quiz complete!",
     })
 
-# Just a simple route to see the user’s highscore or handle a next step:
+# Just a simple route to see the userâ€™s highscore or handle a next step:
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session:
