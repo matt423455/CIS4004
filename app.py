@@ -1,100 +1,271 @@
-from flask import Flask, request, session, redirect, url_for
+from flask import Flask, request, session, redirect, url_for, jsonify, render_template
 from flask_cors import CORS
 import mysql.connector
 from werkzeug.security import generate_password_hash
-import msal  # Microsoft Authentication Library for Python
+import msal
+import random
+import time
 
 app = Flask(__name__)
-app.secret_key = '17344d5039b0c598f2bdc9f866a500a0'  # Replace with your secure secret key
-CORS(app)  # Enable CORS for React (if needed)
+app.secret_key = '17344d5039b0c598f2bdc9f866a500a0'  # Replace with a secure secret key
+CORS(app)
 
 # --- Database configuration ---
 db_config = {
     'host': 'localhost',
-    'user': 'HOLDER',           # Replace with your MySQL username
-    'password': 'Cookie123',    # Replace with your MySQL password
+    'user': 'HOLDER',        # Replace with your MySQL username
+    'password': 'Cookie123', # Replace with your MySQL password
     'database': 'QuizGame'
 }
 
-# --- Microsoft Entra / MSAL configuration ---
-client_id     = '4252cb8e-b486-475c-9163-5e0b679e47ea'  # Application (client) ID from Azure
-client_secret = '~d38Q~SpLtT-Tl4IBhfLR_HqNpqdkym6FUjZlcK.'  # Client secret from Azure
-tenant_id     = '5ba7dd49-7ac9-4955-b136-4f6f3b6d4709'  # Directory (tenant) ID from Azure
+# --- MSAL configuration ---
+client_id     = '4252cb8e-b486-475c-9163-5e0b679e47ea'
+client_secret = '~d38Q~SpLtT-Tl4IBhfLR_HqNpqdkym6FUjZlcK.'
+tenant_id     = '5ba7dd49-7ac9-4955-b136-4f6f3b6d4709'
 authority     = f'https://login.microsoftonline.com/{tenant_id}'
-redirect_uri  = 'https://www.triviaparadise.online/getAToken'  # Must exactly match your Azure app settings
-scope         = ['User.Read']  # Adjust scopes as needed
+redirect_uri  = 'https://www.triviaparadise.online/getAToken'
+scope         = ['User.Read']
 
-# Initialize the MSAL confidential client
 msal_app = msal.ConfidentialClientApplication(
     client_id,
     authority=authority,
     client_credential=client_secret
 )
 
-# --- Routes ---
-
-# Root route: automatically sends users to login (MSAL) flow.
+# -----------------------------
+#      EXISTING MSAL ROUTES
+# -----------------------------
 @app.route('/')
 def index():
     return redirect(url_for('login'))
 
-# /login route: simply redirects to /getAToken to start the MSAL authentication flow.
 @app.route('/login')
 def login():
     return redirect(url_for('getAToken'))
 
-# /getAToken handles the MSAL auth flow.
 @app.route('/getAToken')
 def getAToken():
     code = request.args.get('code')
     if not code:
-        # No code provided yet; redirect to Microsoft's login page.
+        # No code: redirect to Microsoft login
         auth_url = msal_app.get_authorization_request_url(scope, redirect_uri=redirect_uri)
         return redirect(auth_url)
     
-    # Once redirected back from Microsoft with a code:
+    # Once redirected back with code:
     result = msal_app.acquire_token_by_authorization_code(code, scopes=scope, redirect_uri=redirect_uri)
     if 'access_token' in result:
-        # Extract user details from the token's claims.
         id_token_claims = result.get('id_token_claims', {})
         email = id_token_claims.get('preferred_username') or id_token_claims.get('email')
         username = id_token_claims.get('name') or email
+        
         if not email:
             return "Error: No email found in token claims", 400
-
+        
         try:
             conn = mysql.connector.connect(**db_config)
             cursor = conn.cursor()
-            # Check if the user already exists by email.
-            query = "SELECT id FROM users WHERE email = %s"
-            cursor.execute(query, (email,))
-            result_db = cursor.fetchone()
-            if result_db:
-                user_id = result_db[0]
+            # Check if user exists:
+            cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+            row = cursor.fetchone()
+            if row:
+                user_id = row[0]
             else:
-                # If the user doesn't exist, insert a new record.
-                # A default password is set (hashed) but will not be used since MSAL handles auth.
+                # Insert new user
                 default_password = generate_password_hash("defaultpassword")
                 insert_query = "INSERT INTO users (username, email, password) VALUES (%s, %s, %s)"
                 cursor.execute(insert_query, (username, email, default_password))
                 conn.commit()
                 user_id = cursor.lastrowid
+            
+            # Store user in session
             session['user_id'] = user_id
+            
         except mysql.connector.Error as err:
             return f"Database error: {str(err)}", 400
         finally:
             cursor.close()
             conn.close()
-        return redirect(url_for('dashboard'))
+        
+        return redirect(url_for('select_quiz'))
     else:
         return f"Token acquisition failed: {result.get('error_description', '')}", 400
 
-# /dashboard: A protected route that shows a successful login message.
+# -----------------------------------
+#    QUIZ-RELATED ROUTES START HERE
+# -----------------------------------
+
+@app.route('/select_quiz')
+def select_quiz():
+    """
+    Display a page or return JSON that lets the user pick Category & Difficulty.
+    For simplicity, we'll show them in a basic HTML form or return them as JSON.
+    """
+
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    # Ideally you'd gather unique categories and difficulties from the DB:
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        
+        # Get distinct categories
+        cursor.execute("SELECT DISTINCT category FROM questions")
+        categories = [row[0] for row in cursor.fetchall()]
+        
+        # Get distinct difficulties
+        cursor.execute("SELECT DISTINCT difficulty FROM questions")
+        difficulties = [row[0] for row in cursor.fetchall()]
+        
+    except mysql.connector.Error as err:
+        return f"Database error: {str(err)}", 400
+    finally:
+        cursor.close()
+        conn.close()
+    
+    # This example returns JSON, but you could also use a template
+    return jsonify({
+        'message': "Select a quiz category and difficulty",
+        'categories': categories,
+        'difficulties': difficulties
+    })
+
+@app.route('/start_quiz', methods=['POST'])
+def start_quiz():
+    """
+    User chooses the category & difficulty and we fetch questions from DB.
+    We'll randomly pick N questions or all questions in that category/difficulty.
+    Return them to the front-end so user can see them & answer.
+    
+    The 1-minute timer can be handled front-end, or via server logic if you prefer. 
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    data = request.json
+    category   = data.get('category')
+    difficulty = data.get('difficulty')
+    
+    # For example, fetch 10 random questions from the DB
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)  # dictionary=True for easier reading of columns
+        
+        query = """
+            SELECT id, question, correct_answer 
+            FROM questions
+            WHERE category = %s
+              AND difficulty = %s
+            ORDER BY RAND()
+            LIMIT 10
+        """
+        cursor.execute(query, (category, difficulty))
+        questions_db = cursor.fetchall()
+        
+    except mysql.connector.Error as err:
+        return jsonify({'error': f"Database error: {str(err)}"}), 400
+    finally:
+        cursor.close()
+        conn.close()
+    
+    # For security, we don't want to send correct answers back in the same request.
+    # We'll store them in the user session to compare later.
+    # That said, if you have many concurrent quizzes, store them differently.
+    question_list = []
+    correct_answers_map = {}
+    
+    for q in questions_db:
+        q_id = q["id"]
+        question_list.append({
+            'id': q_id,
+            'question': q['question'],
+        })
+        correct_answers_map[q_id] = q['correct_answer']
+    
+    # Store correct answers in session:
+    session['correct_answers'] = correct_answers_map
+    
+    # Return the question list to the front-end
+    return jsonify({
+        'questions': question_list,
+        'message': f"Quiz started for category: {category}, difficulty: {difficulty}"
+    })
+
+@app.route('/submit_answers', methods=['POST'])
+def submit_answers():
+    """
+    The front-end calls this once the user is done OR the 1-minute timer runs out.
+    We compare user’s answers to the correct ones (in session), calculate score,
+    update user’s high score in DB, and return the result.
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    
+    user_id = session['user_id']
+    user_answers = request.json.get('answers', [])  # e.g. list of { 'question_id': 123, 'answer': 'True' }
+    
+    # Retrieve the correct answers
+    correct_answers_map = session.get('correct_answers', {})
+    
+    score = 0
+    for ans in user_answers:
+        qid = ans['question_id']
+        user_answer = ans['answer']
+        # Compare
+        if str(correct_answers_map.get(qid, '')).lower() == str(user_answer).lower():
+            score += 1
+    
+    # Clear out correct answers from session once used
+    session.pop('correct_answers', None)
+    
+    # Now we check if this score is higher than user's current highscore
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        
+        # Get current highscore
+        cursor.execute("SELECT highscore FROM users WHERE id = %s", (user_id,))
+        row = cursor.fetchone()
+        current_highscore = row[0] if row else 0
+        
+        if score > current_highscore:
+            # Update new highscore
+            cursor.execute("UPDATE users SET highscore = %s WHERE id = %s", (score, user_id))
+            conn.commit()
+        
+    except mysql.connector.Error as err:
+        return jsonify({'error': f"Database error: {str(err)}"}), 400
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return jsonify({
+        'score': score,
+        'message': "Quiz complete!",
+    })
+
+# Just a simple route to see the user’s highscore or handle a next step:
 @app.route('/dashboard')
 def dashboard():
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    return "Successfully logged in!"
+    
+    user_id = session['user_id']
+    highscore = 0
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        cursor.execute("SELECT highscore FROM users WHERE id = %s", (user_id,))
+        row = cursor.fetchone()
+        if row:
+            highscore = row[0]
+    except mysql.connector.Error as err:
+        return f"Database error: {str(err)}", 400
+    finally:
+        cursor.close()
+        conn.close()
+    
+    return f"Your current high score is: {highscore}"
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
