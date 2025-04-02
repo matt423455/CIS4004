@@ -88,7 +88,7 @@ def getAToken():
         
         return redirect(url_for('select_quiz'))
     else:
-        return f"Token acquisition failed: {result.get('error_description', '')}", 400
+        return f"Token acquisition failedd: {result.get('error_description', '')}", 400
 
 # -----------------------------------
 #    QUIZ-RELATED ROUTES START HERE
