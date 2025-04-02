@@ -100,7 +100,7 @@ def select_quiz():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    # Ideally you'd gather unique categories and difficulties from the DB:
+    # Ideally we'd gather unique categories and difficulties from the DB:
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
@@ -165,7 +165,7 @@ def start_quiz():
     
     # For security, we don't want to send correct answers back in the same request.
     # We'll store them in the user session to compare later.
-    # That said, if you have many concurrent quizzes, store them differently.
+    # Concurrent quizzes will be stored differently.
     questions_for_client = []
     for q in questions_db:
         questions_for_client.append({
