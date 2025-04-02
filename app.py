@@ -186,7 +186,7 @@ def submit_answers():
     
     user_id = session['user_id']
     user_answers = request.json.get('answers', [])  # e.g. list of { 'question_id': 123, 'answer': 'True' }
-    
+
     # Retrieve the correct answers
     correct_answers_map = session.get('correct_answers', {})
     
@@ -206,6 +206,9 @@ def submit_answers():
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
         
+        #store game history
+        cursor.execute("INSERT INTO game_history (user_id, category, difficulty, score, timestamp) VALUES (%s, %s, %s, %s, %s, NOW())", (user_id, "category", "difficulty", score))
+
         # Get current highscore
         cursor.execute("SELECT highscore FROM users WHERE id = %s", (user_id,))
         row = cursor.fetchone()
@@ -234,21 +237,31 @@ def dashboard():
         return redirect(url_for('login'))
     
     user_id = session['user_id']
-    highscore = 0
+
+    #highscore = 0
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        cursor.execute("SELECT highscore FROM users WHERE id = %s", (user_id,))
-        row = cursor.fetchone()
-        if row:
-            highscore = row[0]
+
+        cursor.execute("SELECT username, email, highscore FROM users WHERE id = %s", (user_id,))
+        user_info = cursor.fetchone()
+        #row = 
+
+        cursor.execute("SELECT category, diffuculty, score, timestamp FROM game_history WHERE user_id = %s", (user_id,))
+        history = cursor.fetchall()
+        #if row:
+            #highscore = row[0]
     except mysql.connector.Error as err:
         return f"Database error: {str(err)}", 400
     finally:
         cursor.close()
         conn.close()
     
-    return f"Your current high score is: {highscore}"
+    return render_template(
+        "dashboard.html",
+        user = user_info,
+        history = history
+    )
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
