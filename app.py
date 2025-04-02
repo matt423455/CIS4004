@@ -59,7 +59,7 @@ def getAToken():
         username = id_token_claims.get('name') or email
         
         if not email:
-            return "Error: No email found in token claims", 400
+            return "Error: N email found in token claims", 400
         
         try:
             conn = mysql.connector.connect(**db_config)
