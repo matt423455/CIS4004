@@ -47,7 +47,7 @@ def login():
 def getAToken():
     code = request.args.get('code')
     if not code:
-        # No code: redirect to Microsoft login
+        # redirect to Microsoft login
         auth_url = msal_app.get_authorization_request_url(scope, redirect_uri=redirect_uri)
         return redirect(auth_url)
     
@@ -88,7 +88,7 @@ def getAToken():
         
         return redirect(url_for('select_quiz'))
     else:
-        return f"Token acquisition failedd: {result.get('error_description', '')}", 400
+        return f"Token acquisition failed: {result.get('error_description', '')}", 400
 
 # -----------------------------------
 #    QUIZ-RELATED ROUTES START HERE
@@ -100,7 +100,7 @@ def select_quiz():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    # Ideally we'd gather unique categories and difficulties from the DB:
+    # gather categories and difficulties from the DB:
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
@@ -119,7 +119,7 @@ def select_quiz():
         cursor.close()
         conn.close()
     
-    # This example returns JSON, but you could also use a template
+    # renders template with categories and difficulties
     return render_template(
         'select_quiz.html',
         categories=categories,
@@ -141,7 +141,7 @@ def start_quiz():
         category   = request.form.get('category')
         difficulty = request.form.get('difficulty')
     
-    # For example, fetch 10 random questions from the DB
+    
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)  # dictionary=True for easier reading of columns
@@ -166,13 +166,14 @@ def start_quiz():
     # For security, we don't want to send correct answers back in the same request.
     # We'll store them in the user session to compare later.
     # Concurrent quizzes will be stored differently.
-    questions_for_client = []
-    for q in questions_db:
-        questions_for_client.append({
-            'id': q['id'],
-            'question': q['question'],
-            'correct_answer': q['correct_answer']
-        })
+    session['correct_answers'] = {q['id']: q['correct_answer'] for q in questions_db}
+    questions_for_client = [{'id': q['id'], 'question': q['question']} for q in questions_db]
+    #for q in questions_db:
+        #questions_for_client.append({
+            #'id': q['id'],
+            #'question': q['question'],
+            #'correct_answer': q['correct_answer']
+       # })
 
     return jsonify({
         'message': f"Quiz started for category: {category}, difficulty: {difficulty}",
@@ -186,6 +187,9 @@ def submit_answers():
     
     user_id = session['user_id']
     user_answers = request.json.get('answers', [])  # e.g. list of { 'question_id': 123, 'answer': 'True' }
+
+    if not user_answers:
+        return jsonify({'error': 'No answers submitted'}), 400
 
     # Retrieve the correct answers
     correct_answers_map = session.get('correct_answers', {})
@@ -247,7 +251,12 @@ def dashboard():
         user_info = cursor.fetchone()
         #row = 
 
-        cursor.execute("SELECT category, diffuculty, score, timestamp FROM game_history WHERE user_id = %s", (user_id,))
+        cursor.execute("""
+                       SELECT category, difficulty, score, timestamp 
+                       FROM game_history 
+                       WHERE user_id = %s
+                       ORDER BY timestamp DESC
+                       """, (user_id,))
         history = cursor.fetchall()
         #if row:
             #highscore = row[0]
