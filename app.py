@@ -54,12 +54,6 @@ def login():
 
 @app.route('/getAToken')
 def getAToken():
-    """
-    1) If there's no "code", redirect to Microsoft sign-in
-    2) Otherwise, exchange the code for an access token,
-       create or find user in DB, store user_id in session,
-       and redirect back to '/' to show start_quiz.html
-    """
     code = request.args.get('code')
     if not code:
         # Step 1: No code => redirect to Microsoft login
@@ -78,7 +72,9 @@ def getAToken():
     if 'access_token' in result:
         id_token_claims = result.get('id_token_claims', {})
         email = id_token_claims.get('preferred_username') or id_token_claims.get('email')
-        username = id_token_claims.get('name') or email
+        
+        # 'name' from Microsoft SSO claims:
+        real_name = id_token_claims.get('name') or email
 
         if not email:
             return "Error: No email found in token claims", 400
@@ -87,34 +83,44 @@ def getAToken():
             conn = mysql.connector.connect(**db_config)
             cursor = conn.cursor()
             # Check if user exists:
-            cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+            cursor.execute("SELECT id, username FROM users WHERE email = %s", (email,))
             row = cursor.fetchone()
+            
             if row:
                 user_id = row[0]
+                existing_username = row[1]
             else:
-                # Insert new user
+                # Insert new user with name from SSO, username is blank initially
                 default_password = generate_password_hash("defaultpassword")
                 insert_query = """
-                    INSERT INTO users (username, email, password)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO users (name, email, password, username)
+                    VALUES (%s, %s, %s, %s)
                 """
-                cursor.execute(insert_query, (username, email, default_password))
+                # name=real_name, email, password=default, username='' for now
+                cursor.execute(insert_query, (real_name, email, default_password, ''))
                 conn.commit()
                 user_id = cursor.lastrowid
-            
-            # Store user in session
+                existing_username = ''
+
+            # Store user_id in session
             session['user_id'] = user_id
+            # Also store the user’s current "username" in session for convenience
+            session['username'] = existing_username
+
         except mysql.connector.Error as err:
             return f"Database error: {str(err)}", 400
         finally:
             cursor.close()
             conn.close()
         
-        # After successful login, redirect home -> loads start_quiz.html
-        return redirect(url_for('index'))
+        # After successful login, redirect...
+        #   If they don’t have a username yet, prompt them.
+        if not existing_username:
+            return redirect(url_for('prompt_username'))
+        else:
+            return redirect(url_for('index'))
     else:
         return f"Token acquisition failed: {result.get('error_description', '')}", 400
-
 
 # ============================
 #   Single-Question-At-A-Time
@@ -238,6 +244,50 @@ def submit_answer():
     print(f"submit_answer() => question_id={question_id}, user_answer={user_answer}")
     return jsonify({'message': 'Answer recorded'})
 
+@app.route('/prompt_username')
+def prompt_username():
+    """
+    Simple route to render an HTML form so user can pick a username
+    if they don't already have one.
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    return render_template('choose_username.html')
+
+
+@app.route('/set_username', methods=['POST'])
+def set_username():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    chosen_username = request.form.get('username', '').strip()
+
+    if not chosen_username:
+        # Could handle error gracefully, re-prompt, etc.
+        return "Username cannot be blank", 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        # Update the existing user record:
+        cursor.execute("""
+            UPDATE users
+            SET username = %s
+            WHERE id = %s
+        """, (chosen_username, user_id))
+        conn.commit()
+    except mysql.connector.Error as err:
+        return f"Database error: {str(err)}", 400
+    finally:
+        cursor.close()
+        conn.close()
+
+    # Store in session for convenience
+    session['username'] = chosen_username
+
+    # Now redirect to main page
+    return redirect(url_for('index'))
 
 
 @app.route('/finish_quiz', methods=['POST'])
@@ -329,51 +379,6 @@ def finish_quiz():
         'correct_count': correct_count,
         'wrong_count': wrong_count
     })
-
-
-@app.route('/dashboard')
-def dashboard():
-    """
-    Show user info & last 20 game results
-    """
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    user_id = session['user_id']
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-
-        # user info
-        cursor.execute("""
-            SELECT username, email, high_score
-            FROM users
-            WHERE id = %s
-        """, (user_id,))
-        user_info = cursor.fetchone()  # (username, email, highscore)
-
-        # last 20 games
-        cursor.execute("""
-            SELECT category, difficulty, score, timestamp
-            FROM game_history
-            WHERE user_id = %s
-            ORDER BY timestamp DESC
-            LIMIT 20
-        """, (user_id,))
-        history = cursor.fetchall()
-
-    except mysql.connector.Error as err:
-        return f"Database error: {str(err)}", 400
-    finally:
-        cursor.close()
-        conn.close()
-
-    return render_template(
-        "dashboard.html",
-        user=user_info,
-        history=history
-    )
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
