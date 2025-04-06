@@ -234,7 +234,7 @@ def submit_answer():
 
 @app.route('/finish_quiz', methods=['POST'])
 def finish_quiz():
- if 'user_id' not in session:
+    if 'user_id' not in session:
         return redirect(url_for('login'))
 
     quiz_questions = session.get('quiz_questions', [])
