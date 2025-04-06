@@ -260,7 +260,7 @@ def finish_quiz():
 
     for q in quiz_questions:
         qid_str = str(q['id'])
-        user_ans = user_answers.get(qid_str, '')
+        user_ans = user_answers.get(qid_str, '').strip().lower()
         correct_ans = q['correct_answer'].strip().lower()
         difficulty = q['difficulty'].strip().lower()
 
