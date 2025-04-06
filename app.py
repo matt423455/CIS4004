@@ -216,7 +216,6 @@ def get_question():
 
 @app.route('/submit_answer', methods=['POST'])
 def submit_answer():
-def submit_answer():
     if 'user_id' not in session:
         # or return a JSON error if you prefer
         return redirect(url_for('login'))
