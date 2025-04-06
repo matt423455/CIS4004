@@ -39,7 +39,6 @@ const Login = ({ onSignUpClick }) => {
 
       <div className="form-links">
         <a className="form-link">Forgot password?</a>
-        <a className="form-link" onClick={onSignUpClick}>Sign up</a>
       </div>
     </div>
   );
