@@ -6,11 +6,26 @@
   to { opacity: 1; }
 }
 
+/* Gradient Shift Animation */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
 /* Main Container */
 .app-container {
   height: 100vh;
   width: 100vw;
   background: linear-gradient(135deg, #10439F 0%, #874CCC 50%, #C65BCF 100%);
+  background-size: 300% 300%;  /* Increased size for more dramatic movement */
+  animation: gradientShift 8s ease infinite;  /* Reduced from 15s to 8s for faster animation */
   display: flex;
   align-items: center;
   justify-content: center;
