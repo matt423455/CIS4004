@@ -216,44 +216,33 @@ def get_question():
 
 @app.route('/submit_answer', methods=['POST'])
 def submit_answer():
-    """
-    Front-end sends { question_id, answer: "True"/"False" }
-    We store it in session['user_answers'] and increment index
-    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
     data = request.json
     question_id = data.get('question_id')
     user_answer = data.get('answer')
+    print(f"submit_answer() received question_id={question_id}, user_answer={user_answer}")
 
-    # record in session
     user_answers = session.get('user_answers', {})
     user_answers[question_id] = user_answer
     session['user_answers'] = user_answers
 
-    # Move to next question
     session['current_question_index'] += 1
-
     return jsonify({'message': 'Answer recorded'})
 
 
 @app.route('/finish_quiz', methods=['POST'])
 def finish_quiz():
-    """
-    Weighted scoring:
-      easy    = ±100
-      medium  = ±200
-      hard    = ±300
-    Insert result into game_history, update highscore if needed
-    Return final { score, correct_count, wrong_count }
-    """
-    if 'user_id' not in session:
+ if 'user_id' not in session:
         return redirect(url_for('login'))
 
-    user_id = session['user_id']
     quiz_questions = session.get('quiz_questions', [])
     user_answers = session.get('user_answers', {})
+
+    print("=== finish_quiz DEBUG ===")
+    print(f"quiz_questions length = {len(quiz_questions)}")
+    print(f"user_answers = {user_answers}")
 
     correct_count = 0
     wrong_count = 0
@@ -265,7 +254,8 @@ def finish_quiz():
         user_ans = user_answers.get(qid, '').strip().lower()
         difficulty = q['difficulty'].strip().lower()
 
-        # Weighted scoring
+        print(f"QID={qid}, correct_ans={correct_ans}, user_ans={user_ans}, diff={difficulty}")
+
         if difficulty == 'easy':
             weight = 100
         elif difficulty == 'medium':
@@ -273,7 +263,7 @@ def finish_quiz():
         elif difficulty == 'hard':
             weight = 300
         else:
-            weight = 100  # fallback
+            weight = 100
 
         if user_ans in ['true', 'false']:
             if user_ans == correct_ans:
@@ -282,6 +272,11 @@ def finish_quiz():
             else:
                 wrong_count += 1
                 score -= weight
+        else:
+            print(" -> user_ans not valid (not 'true'/'false'?), skipping")
+
+    print(f"Finished loop: correct={correct_count}, wrong={wrong_count}, score={score}")
+
         # if user never answered or invalid => no penalty
 
     # Clear session quiz data
