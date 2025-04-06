@@ -7,14 +7,14 @@ import random
 import time
 
 app = Flask(__name__)
-app.secret_key = '17344d5039b0c598f2bdc9f866a500a0'  # Replace with a secure secret key
+app.secret_key = 'YOUR-SECRET-KEY'
 CORS(app, supports_credentials=True)
 
 # --- Database configuration ---
 db_config = {
     'host': 'localhost',
-    'user': 'HOLDER',        # Replace with your MySQL username
-    'password': 'Cookie123', # Replace with your MySQL password
+    'user': 'HOLDER',         # Replace with your MySQL username
+    'password': 'Cookie123',  # Replace with your MySQL password
     'database': 'QuizGame'
 }
 
@@ -32,9 +32,6 @@ msal_app = msal.ConfidentialClientApplication(
     client_credential=client_secret
 )
 
-# -----------------------------
-#      EXISTING MSAL ROUTES
-# -----------------------------
 @app.route('/')
 def index():
     return redirect(url_for('login'))
@@ -86,180 +83,265 @@ def getAToken():
             cursor.close()
             conn.close()
         
-        return redirect(url_for('select_quiz'))
+        return redirect(url_for('start_quiz_page'))
     else:
         return f"Token acquisition failed: {result.get('error_description', '')}", 400
 
-# -----------------------------------
-#    QUIZ-RELATED ROUTES START HERE
-# -----------------------------------
 
-@app.route('/select_quiz')
-def select_quiz():
+# ============================
+#    Single-Question-At-A-Time
+# ============================
 
+@app.route('/start_quiz_page')
+def start_quiz_page():
+    """
+    Displays a simple "Start Quiz" page. 
+    No category/difficulty selection; we always get
+    3 Hard, 7 Medium, 10 Easy from ALL categories.
+    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
+    return render_template('start_quiz.html')
 
-    # gather categories and difficulties from the DB:
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-        
-        # Get distinct categories
-        cursor.execute("SELECT DISTINCT category FROM questions")
-        categories = [row[0] for row in cursor.fetchall()]
-        
-        # Get distinct difficulties
-        cursor.execute("SELECT DISTINCT difficulty FROM questions")
-        difficulties = [row[0] for row in cursor.fetchall()]
-        
-    except mysql.connector.Error as err:
-        return f"Database error: {str(err)}", 400
-    finally:
-        cursor.close()
-        conn.close()
-    
-    # renders template with categories and difficulties
-    return render_template(
-        'select_quiz.html',
-        categories=categories,
-        difficulties=difficulties
-    )
 
 @app.route('/start_quiz', methods=['POST'])
 def start_quiz():
+    """
+    1) Fetch 20 total questions: 3 Hard, 7 Medium, 10 Easy from random categories
+    2) Shuffle them
+    3) Save them in session to serve one at a time
+    4) Return JSON with success
+    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
-    if request.content_type == 'application/json':
-        # Parse JSON
-        data = request.json
-        category   = data.get('category')
-        difficulty = data.get('difficulty')
-    else:
-        # Assume it's an HTML form
-        category   = request.form.get('category')
-        difficulty = request.form.get('difficulty')
-    
-    
     try:
         conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor(dictionary=True)  # dictionary=True for easier reading of columns
-        
-        query = """
-            SELECT id, question, correct_answer 
+        cursor = conn.cursor(dictionary=True)
+
+        # -- Get 3 random Hard --
+        cursor.execute("""
+            SELECT id, question, correct_answer, difficulty
             FROM questions
-            WHERE category = %s
-              AND difficulty = %s
+            WHERE difficulty = 'hard'
             ORDER BY RAND()
-            LIMIT 20
-        """
-        cursor.execute(query, (category, difficulty))
-        questions_db = cursor.fetchall()
-        
+            LIMIT 3
+        """)
+        hard_questions = cursor.fetchall()
+
+        # -- Get 7 random Medium --
+        cursor.execute("""
+            SELECT id, question, correct_answer, difficulty
+            FROM questions
+            WHERE difficulty = 'medium'
+            ORDER BY RAND()
+            LIMIT 7
+        """)
+        medium_questions = cursor.fetchall()
+
+        # -- Get 10 random Easy --
+        cursor.execute("""
+            SELECT id, question, correct_answer, difficulty
+            FROM questions
+            WHERE difficulty = 'easy'
+            ORDER BY RAND()
+            LIMIT 10
+        """)
+        easy_questions = cursor.fetchall()
+
+        # combine them
+        questions_db = hard_questions + medium_questions + easy_questions
+        # randomize the combined list
+        random.shuffle(questions_db)
+
     except mysql.connector.Error as err:
         return jsonify({'error': f"Database error: {str(err)}"}), 400
     finally:
         cursor.close()
         conn.close()
-    
-    # For security, we don't want to send correct answers back in the same request.
-    # We'll store them in the user session to compare later.
-    # Concurrent quizzes will be stored differently.
-    session['correct_answers'] = {q['id']: q['correct_answer'] for q in questions_db}
-    questions_for_client = [{'id': q['id'], 'question': q['question']} for q in questions_db]
-    #for q in questions_db:
-        #questions_for_client.append({
-            #'id': q['id'],
-            #'question': q['question'],
-            #'correct_answer': q['correct_answer']
-       # })
+
+    # Save them in the session
+    # We'll store entire question objects in session, but let's also keep a
+    # simpler version to send to client. We'll track userAnswers in session as well.
+    session['quiz_questions'] = questions_db
+    session['current_question_index'] = 0  # start with first question
+    session['user_answers'] = {}          # e.g. { question_id: "True"/"False" }
 
     return jsonify({
-        'message': f"Quiz started for category: {category}, difficulty: {difficulty}",
-        'questions': questions_for_client
+        'message': "Quiz started! 3 Hard, 7 Medium, 10 Easy questions chosen.",
+        'total_questions': len(questions_db)
     })
 
-@app.route('/submit_answers', methods=['POST'])
-def submit_answers():
+
+@app.route('/get_question', methods=['GET'])
+def get_question():
+    """
+    Returns the "current question" to the front-end.
+    If we've gone beyond the last question, return something that indicates end-of-quiz.
+    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    
+
+    quiz_questions = session.get('quiz_questions', [])
+    index = session.get('current_question_index', 0)
+
+    if index >= len(quiz_questions):
+        # No more questions
+        return jsonify({
+            'done': True,
+            'message': 'No more questions!'
+        })
+
+    q = quiz_questions[index]
+    return jsonify({
+        'done': False,
+        'question_id': q['id'],
+        'question': q['question'],
+        # We intentionally do NOT send correct_answer to the client
+        'difficulty': q['difficulty']
+    })
+
+
+@app.route('/submit_answer', methods=['POST'])
+def submit_answer():
+    """
+    The front-end sends the user's answer (True/False) for the current question.
+    We'll store it in session and move the index forward.
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    data = request.json
+    question_id = data.get('question_id')
+    user_answer = data.get('answer')  # "True" or "False"
+
+    # store in session
+    user_answers = session.get('user_answers', {})
+    user_answers[question_id] = user_answer
+    session['user_answers'] = user_answers
+
+    # increment the question index
+    session['current_question_index'] = session.get('current_question_index', 0) + 1
+
+    return jsonify({'message': 'Answer recorded'})
+
+
+@app.route('/finish_quiz', methods=['POST'])
+def finish_quiz():
+    """
+    Calculate final score with weighting:
+    - easy   = ±100
+    - medium = ±200
+    - hard   = ±300
+
+    Return final score + correct/wrong counts. 
+    Store the result in `game_history`.
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
     user_id = session['user_id']
-    user_answers = request.json.get('answers', [])  # e.g. list of { 'question_id': 123, 'answer': 'True' }
-
-    if not user_answers:
-        return jsonify({'error': 'No answers submitted'}), 400
-
-    # Retrieve the correct answers
-    correct_answers_map = session.get('correct_answers', {})
+    quiz_questions = session.get('quiz_questions', [])
+    user_answers = session.get('user_answers', {})
     
+    correct_count = 0
+    wrong_count = 0
     score = 0
-    for ans in user_answers:
-        qid = ans['question_id']
-        user_answer = ans['answer']
-        # Compare
-        if str(correct_answers_map.get(qid, '')).lower() == str(user_answer).lower():
-            score += 1
-    
-    # Clear out correct answers from session once used
-    session.pop('correct_answers', None)
-    
-    # Now we check if this score is higher than user's current highscore
+
+    for q in quiz_questions:
+        qid = q['id']
+        correct_ans = q['correct_answer'].lower().strip()
+        user_ans = user_answers.get(qid, '').lower().strip()
+        difficulty = q['difficulty'].lower().strip()
+
+        # Determine weighting factor
+        if difficulty == 'easy':
+            weight = 100
+        elif difficulty == 'medium':
+            weight = 200
+        elif difficulty == 'hard':
+            weight = 300
+        else:
+            weight = 100  # fallback
+
+        if user_ans == correct_ans and user_ans in ['true','false']:
+            correct_count += 1
+            score += weight
+        elif user_ans in ['true','false']:
+            wrong_count += 1
+            score -= weight
+        else:
+            # user didn't answer or gave an invalid answer => no penalty or reward
+            pass
+
+    # 1) Clear the session variables for quiz
+    session.pop('quiz_questions', None)
+    session.pop('current_question_index', None)
+    session.pop('user_answers', None)
+
+    # 2) Store the result in `game_history`
+    #    We'll keep the category/difficulty fields just as placeholders or store "mixed" since we used all categories.
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
         
-        #store game history
-        cursor.execute("INSERT INTO game_history (user_id, category, difficulty, score, timestamp) VALUES (%s, %s, %s, %s, %s, NOW())", (user_id, "category", "difficulty", score))
-
-        # Get current highscore
+        cursor.execute("""
+            INSERT INTO game_history (user_id, category, difficulty, score, timestamp)
+            VALUES (%s, %s, %s, %s, NOW())
+        """, (user_id, "mixed", "mixed", score))
+        
+        # check the user's current highscore
         cursor.execute("SELECT highscore FROM users WHERE id = %s", (user_id,))
         row = cursor.fetchone()
         current_highscore = row[0] if row else 0
-        
+
+        # update if new highscore
         if score > current_highscore:
-            # Update new highscore
             cursor.execute("UPDATE users SET highscore = %s WHERE id = %s", (score, user_id))
-            conn.commit()
-        
+
+        conn.commit()
     except mysql.connector.Error as err:
         return jsonify({'error': f"Database error: {str(err)}"}), 400
     finally:
         cursor.close()
         conn.close()
-    
+
     return jsonify({
+        'message': "Quiz finished",
         'score': score,
-        'message': "Quiz complete!",
+        'correct_count': correct_count,
+        'wrong_count': wrong_count
     })
 
-# Just a simple route to see the user’s highscore or handle a next step:
+
 @app.route('/dashboard')
 def dashboard():
+    """
+    Show the user’s info & last 20 scores in game_history.
+    """
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
     user_id = session['user_id']
 
-    #highscore = 0
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-
+        
+        # get user info
         cursor.execute("SELECT username, email, highscore FROM users WHERE id = %s", (user_id,))
-        user_info = cursor.fetchone()
-        #row = 
-
+        user_info = cursor.fetchone()  # (username, email, highscore)
+        
+        # get last 20 game histories
         cursor.execute("""
-                       SELECT category, difficulty, score, timestamp 
-                       FROM game_history 
-                       WHERE user_id = %s
-                       ORDER BY timestamp DESC
-                       """, (user_id,))
+            SELECT category, difficulty, score, timestamp
+            FROM game_history
+            WHERE user_id = %s
+            ORDER BY timestamp DESC
+            LIMIT 20
+        """, (user_id,))
         history = cursor.fetchall()
-        #if row:
-            #highscore = row[0]
+
     except mysql.connector.Error as err:
         return f"Database error: {str(err)}", 400
     finally:
@@ -268,9 +350,10 @@ def dashboard():
     
     return render_template(
         "dashboard.html",
-        user = user_info,
-        history = history
+        user=user_info,
+        history=history
     )
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
