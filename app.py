@@ -40,7 +40,10 @@ def index():
     """
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    return render_template('start_quiz.html')
+
+    the_username = session.get('username', 'UnknownUser')
+
+    return render_template('start_quiz.html', username=the_username)
 
 @app.route('/login')
 def login():
@@ -387,6 +390,8 @@ def finish_quiz():
                 score -= weight
         else:
             print(" -> user_ans not valid (not 'true'/'false'?), skipping")
+
+    score = max(score, 0)
 
     print(f"Finished loop: correct={correct_count}, wrong={wrong_count}, score={score}")
 
