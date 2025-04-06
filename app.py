@@ -32,29 +32,54 @@ msal_app = msal.ConfidentialClientApplication(
     client_credential=client_secret
 )
 
+
 @app.route('/')
 def index():
-    return redirect(url_for('login'))
+    """
+    If logged in, show start_quiz.html
+    If not, redirect to /login
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    return render_template('start_quiz.html')
+
 
 @app.route('/login')
 def login():
+    """
+    Kicks off the MSAL login process
+    """
     return redirect(url_for('getAToken'))
+
 
 @app.route('/getAToken')
 def getAToken():
+    """
+    1) If there's no "code", redirect to Microsoft sign-in
+    2) Otherwise, exchange the code for an access token,
+       create or find user in DB, store user_id in session,
+       and redirect back to '/' to show start_quiz.html
+    """
     code = request.args.get('code')
     if not code:
-        # redirect to Microsoft login
-        auth_url = msal_app.get_authorization_request_url(scope, redirect_uri=redirect_uri)
+        # Step 1: No code => redirect to Microsoft login
+        auth_url = msal_app.get_authorization_request_url(
+            scope, 
+            redirect_uri=redirect_uri
+        )
         return redirect(auth_url)
-    
-    # Once redirected back with code:
-    result = msal_app.acquire_token_by_authorization_code(code, scopes=scope, redirect_uri=redirect_uri)
+
+    # Step 2: We got the code => exchange for token
+    result = msal_app.acquire_token_by_authorization_code(
+        code, 
+        scopes=scope, 
+        redirect_uri=redirect_uri
+    )
     if 'access_token' in result:
         id_token_claims = result.get('id_token_claims', {})
         email = id_token_claims.get('preferred_username') or id_token_claims.get('email')
         username = id_token_claims.get('name') or email
-        
+
         if not email:
             return "Error: No email found in token claims", 400
         
@@ -69,47 +94,39 @@ def getAToken():
             else:
                 # Insert new user
                 default_password = generate_password_hash("defaultpassword")
-                insert_query = "INSERT INTO users (username, email, password) VALUES (%s, %s, %s)"
+                insert_query = """
+                    INSERT INTO users (username, email, password)
+                    VALUES (%s, %s, %s)
+                """
                 cursor.execute(insert_query, (username, email, default_password))
                 conn.commit()
                 user_id = cursor.lastrowid
             
             # Store user in session
             session['user_id'] = user_id
-            
         except mysql.connector.Error as err:
             return f"Database error: {str(err)}", 400
         finally:
             cursor.close()
             conn.close()
         
-        return redirect(url_for('start_quiz_page'))
+        # After successful login, redirect home -> loads start_quiz.html
+        return redirect(url_for('index'))
     else:
         return f"Token acquisition failed: {result.get('error_description', '')}", 400
 
 
 # ============================
-#    Single-Question-At-A-Time
+#   Single-Question-At-A-Time
 # ============================
-
-@app.route('/start_quiz_page')
-def start_quiz_page():
-    """
-    Displays a simple "Start Quiz" page. 
-    No category/difficulty selection; we always get
-    3 Hard, 7 Medium, 10 Easy from ALL categories.
-    """
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    return render_template('start_quiz.html')
-
 
 @app.route('/start_quiz', methods=['POST'])
 def start_quiz():
     """
-    1) Fetch 20 total questions: 3 Hard, 7 Medium, 10 Easy from random categories
+    1) Fetch 20 total questions:
+       3 Hard, 7 Medium, 10 Easy (from all categories)
     2) Shuffle them
-    3) Save them in session to serve one at a time
+    3) Save them in session
     4) Return JSON with success
     """
     if 'user_id' not in session:
@@ -151,7 +168,6 @@ def start_quiz():
 
         # combine them
         questions_db = hard_questions + medium_questions + easy_questions
-        # randomize the combined list
         random.shuffle(questions_db)
 
     except mysql.connector.Error as err:
@@ -160,15 +176,13 @@ def start_quiz():
         cursor.close()
         conn.close()
 
-    # Save them in the session
-    # We'll store entire question objects in session, but let's also keep a
-    # simpler version to send to client. We'll track userAnswers in session as well.
+    # Store them in session for single-question flow
     session['quiz_questions'] = questions_db
-    session['current_question_index'] = 0  # start with first question
-    session['user_answers'] = {}          # e.g. { question_id: "True"/"False" }
+    session['current_question_index'] = 0
+    session['user_answers'] = {}  # e.g. { question_id: "True"/"False" }
 
     return jsonify({
-        'message': "Quiz started! 3 Hard, 7 Medium, 10 Easy questions chosen.",
+        'message': "Quiz started! (3 Hard, 7 Medium, 10 Easy)",
         'total_questions': len(questions_db)
     })
 
@@ -176,8 +190,8 @@ def start_quiz():
 @app.route('/get_question', methods=['GET'])
 def get_question():
     """
-    Returns the "current question" to the front-end.
-    If we've gone beyond the last question, return something that indicates end-of-quiz.
+    Returns the "current question" from session.
+    If out of questions, returns done=true
     """
     if 'user_id' not in session:
         return redirect(url_for('login'))
@@ -186,10 +200,9 @@ def get_question():
     index = session.get('current_question_index', 0)
 
     if index >= len(quiz_questions):
-        # No more questions
         return jsonify({
             'done': True,
-            'message': 'No more questions!'
+            'message': 'No more questions'
         })
 
     q = quiz_questions[index]
@@ -197,7 +210,6 @@ def get_question():
         'done': False,
         'question_id': q['id'],
         'question': q['question'],
-        # We intentionally do NOT send correct_answer to the client
         'difficulty': q['difficulty']
     })
 
@@ -205,23 +217,23 @@ def get_question():
 @app.route('/submit_answer', methods=['POST'])
 def submit_answer():
     """
-    The front-end sends the user's answer (True/False) for the current question.
-    We'll store it in session and move the index forward.
+    Front-end sends { question_id, answer: "True"/"False" }
+    We store it in session['user_answers'] and increment index
     """
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
     data = request.json
     question_id = data.get('question_id')
-    user_answer = data.get('answer')  # "True" or "False"
+    user_answer = data.get('answer')
 
-    # store in session
+    # record in session
     user_answers = session.get('user_answers', {})
     user_answers[question_id] = user_answer
     session['user_answers'] = user_answers
 
-    # increment the question index
-    session['current_question_index'] = session.get('current_question_index', 0) + 1
+    # Move to next question
+    session['current_question_index'] += 1
 
     return jsonify({'message': 'Answer recorded'})
 
@@ -229,13 +241,12 @@ def submit_answer():
 @app.route('/finish_quiz', methods=['POST'])
 def finish_quiz():
     """
-    Calculate final score with weighting:
-    - easy   = ±100
-    - medium = ±200
-    - hard   = ±300
-
-    Return final score + correct/wrong counts. 
-    Store the result in `game_history`.
+    Weighted scoring:
+      easy    = ±100
+      medium  = ±200
+      hard    = ±300
+    Insert result into game_history, update highscore if needed
+    Return final { score, correct_count, wrong_count }
     """
     if 'user_id' not in session:
         return redirect(url_for('login'))
@@ -243,18 +254,18 @@ def finish_quiz():
     user_id = session['user_id']
     quiz_questions = session.get('quiz_questions', [])
     user_answers = session.get('user_answers', {})
-    
+
     correct_count = 0
     wrong_count = 0
     score = 0
 
     for q in quiz_questions:
         qid = q['id']
-        correct_ans = q['correct_answer'].lower().strip()
-        user_ans = user_answers.get(qid, '').lower().strip()
-        difficulty = q['difficulty'].lower().strip()
+        correct_ans = q['correct_answer'].strip().lower()
+        user_ans = user_answers.get(qid, '').strip().lower()
+        difficulty = q['difficulty'].strip().lower()
 
-        # Determine weighting factor
+        # Weighted scoring
         if difficulty == 'easy':
             weight = 100
         elif difficulty == 'medium':
@@ -264,40 +275,41 @@ def finish_quiz():
         else:
             weight = 100  # fallback
 
-        if user_ans == correct_ans and user_ans in ['true','false']:
-            correct_count += 1
-            score += weight
-        elif user_ans in ['true','false']:
-            wrong_count += 1
-            score -= weight
-        else:
-            # user didn't answer or gave an invalid answer => no penalty or reward
-            pass
+        if user_ans in ['true', 'false']:
+            if user_ans == correct_ans:
+                correct_count += 1
+                score += weight
+            else:
+                wrong_count += 1
+                score -= weight
+        # if user never answered or invalid => no penalty
 
-    # 1) Clear the session variables for quiz
+    # Clear session quiz data
     session.pop('quiz_questions', None)
     session.pop('current_question_index', None)
     session.pop('user_answers', None)
 
-    # 2) Store the result in `game_history`
-    #    We'll keep the category/difficulty fields just as placeholders or store "mixed" since we used all categories.
+    # Insert game result
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        
+
         cursor.execute("""
             INSERT INTO game_history (user_id, category, difficulty, score, timestamp)
             VALUES (%s, %s, %s, %s, NOW())
         """, (user_id, "mixed", "mixed", score))
-        
-        # check the user's current highscore
+
+        # Update highscore if needed
         cursor.execute("SELECT highscore FROM users WHERE id = %s", (user_id,))
         row = cursor.fetchone()
         current_highscore = row[0] if row else 0
 
-        # update if new highscore
         if score > current_highscore:
-            cursor.execute("UPDATE users SET highscore = %s WHERE id = %s", (score, user_id))
+            cursor.execute("""
+                UPDATE users
+                SET highscore = %s
+                WHERE id = %s
+            """, (score, user_id))
 
         conn.commit()
     except mysql.connector.Error as err:
@@ -317,22 +329,25 @@ def finish_quiz():
 @app.route('/dashboard')
 def dashboard():
     """
-    Show the user’s info & last 20 scores in game_history.
+    Show user info & last 20 game results
     """
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
     user_id = session['user_id']
-
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
-        
-        # get user info
-        cursor.execute("SELECT username, email, highscore FROM users WHERE id = %s", (user_id,))
+
+        # user info
+        cursor.execute("""
+            SELECT username, email, highscore
+            FROM users
+            WHERE id = %s
+        """, (user_id,))
         user_info = cursor.fetchone()  # (username, email, highscore)
-        
-        # get last 20 game histories
+
+        # last 20 games
         cursor.execute("""
             SELECT category, difficulty, score, timestamp
             FROM game_history
@@ -347,7 +362,7 @@ def dashboard():
     finally:
         cursor.close()
         conn.close()
-    
+
     return render_template(
         "dashboard.html",
         user=user_info,
