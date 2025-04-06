@@ -129,7 +129,7 @@
         }
 
         // -------------------------
-        //  Load the "current" Q
+        //  Load the current Q
         // -------------------------
         function loadQuestion() {
             fetch('/get_question')
@@ -158,7 +158,7 @@
         }
 
         // -----------------------
-        //  Submit user’s answer
+        //  Submit user's answer
         // -----------------------
         function submitAnswer(answer) {
             const container = document.getElementById('questionContainer');
@@ -182,7 +182,7 @@
         }
 
         // --------------------------------
-        //  Finish quiz early or time’s up
+        //  Finish quiz early or time's up
         // --------------------------------
         function finishQuiz() {
             // Stop timer
@@ -204,7 +204,7 @@
                     // Refresh stats & leaderboard to see updated results
                     fetchStats();
 
-                    // If you want to show the "Start Quiz" button again:
+                    // If you want to show the Start Quiz button again:
                     document.getElementById('startBtn').style.display = 'inline';
                 })
                 .catch(err => console.error("Error finishing quiz:", err));
