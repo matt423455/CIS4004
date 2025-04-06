@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>Start Quiz</title>
+</head>
+<body>
+    <h1>Welcome to Trivia Paradise!</h1>
+    <button onclick="startQuiz()">Start Quiz</button>
+
+    <div id="quizArea" style="display: none;">
+        <h2>Time Left: <span id="timer">60</span> seconds</h2>
+        <div id="questionContainer"></div>
+        <button id="trueBtn" style="display:none;" onclick="submitAnswer('True')">True</button>
+        <button id="falseBtn" style="display:none;" onclick="submitAnswer('False')">False</button>
+    </div>
+
+    <div id="resultArea" style="display: none;">
+        <h2>Quiz Results</h2>
+        <p id="scoreText"></p>
+        <p id="correctText"></p>
+        <p id="wrongText"></p>
+        <a href="/dashboard">Go to Dashboard</a>
+    </div>
+
+    <script>
+        let timerId;
+        let timeLeft = 60;
+
+        function startQuiz() {
+            fetch('/start_quiz', { method: 'POST' })
+                .then(res => res.json())
+                .then(data => {
+                    console.log("Quiz started:", data);
+                    document.getElementById('quizArea').style.display = 'block';
+                    document.getElementById('resultArea').style.display = 'none';
+
+                    // Start 60-second timer
+                    timeLeft = 60;
+                    document.getElementById('timer').textContent = timeLeft;
+                    if (timerId) clearInterval(timerId);
+                    timerId = setInterval(() => {
+                        timeLeft--;
+                        document.getElementById('timer').textContent = timeLeft;
+                        if (timeLeft <= 0) {
+                            finishQuiz();
+                        }
+                    }, 1000);
+
+                    loadQuestion(); // Load the first question
+                })
+                .catch(err => console.error("Error starting quiz:", err));
+        }
+
+        function loadQuestion() {
+            fetch('/get_question')
+                .then(res => res.json())
+                .then(qdata => {
+                    console.log("Got question:", qdata);
+                    if (qdata.done) {
+                        // No more questions => finish quiz automatically
+                        finishQuiz();
+                        return;
+                    }
+                    // Show question
+                    const container = document.getElementById('questionContainer');
+                    container.textContent = qdata.question;
+                    document.getElementById('trueBtn').style.display = 'inline';
+                    document.getElementById('falseBtn').style.display = 'inline';
+                })
+                .catch(err => console.error("Error loading question:", err));
+        }
+
+        function submitAnswer(answer) {
+            // Send the answer to the server
+            fetch('/submit_answer', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    answer: answer,
+                    question_id: getCurrentQuestionId() // We'll store it from loadQuestion if needed
+                })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    console.log("Submitted answer:", data);
+                    // load the next question
+                    loadQuestion();
+                })
+                .catch(err => console.error("Error submitting answer:", err));
+        }
+
+        function getCurrentQuestionId() {
+            // We actually don't have an explicit "question_id" from front-end in this minimal example
+            // Option 1: We'll store it in a hidden element in loadQuestion().
+            // Option 2: We'll trust that the server is matching the correct question by index.
+            // For clarity, let's do Option 1:
+
+            // We'll do it by reading from a data attribute we set in loadQuestion() if you prefer,
+            // but in the minimal code above, we didn’t do that. Let's do it quickly:
+            const container = document.getElementById('questionContainer');
+            return container.getAttribute('data-qid') || '';
+        }
+
+        function finishQuiz() {
+            if (timerId) clearInterval(timerId);
+            fetch('/finish_quiz', { method: 'POST' })
+                .then(res => res.json())
+                .then(result => {
+                    console.log("Quiz finished:", result);
+                    document.getElementById('quizArea').style.display = 'none';
+                    document.getElementById('resultArea').style.display = 'block';
+
+                    document.getElementById('scoreText').textContent = "Final Score: " + result.score;
+                    document.getElementById('correctText').textContent = "Correct: " + result.correct_count;
+                    document.getElementById('wrongText').textContent = "Wrong: " + result.wrong_count;
+                })
+                .catch(err => console.error("Error finishing quiz:", err));
+        }
+
+        // Additional step to store question_id:
+        // We update `loadQuestion()` to set a data attribute for the question_id:
+        // So let's fix loadQuestion to do that:
+        (function () {
+            const oldLoadQuestion = loadQuestion;
+            loadQuestion = function () {
+                fetch('/get_question')
+                    .then(res => res.json())
+                    .then(qdata => {
+                        console.log("Got question:", qdata);
+                        if (qdata.done) {
+                            finishQuiz();
+                            return;
+                        }
+                        // Show question
+                        const container = document.getElementById('questionContainer');
+                        container.textContent = qdata.question;
+                        // store question id in an attribute
+                        container.setAttribute('data-qid', qdata.question_id);
+
+                        document.getElementById('trueBtn').style.display = 'inline';
+                        document.getElementById('falseBtn').style.display = 'inline';
+                    })
+                    .catch(err => console.error("Error loading question:", err));
+            }
+        })();
+    </script>
+</body>
+</html>
