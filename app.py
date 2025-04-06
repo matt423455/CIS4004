@@ -236,7 +236,6 @@ def submit_answer():
     session['current_question_index'] += 1
 
     print(f"submit_answer() => question_id={question_id}, user_answer={user_answer}")
-    sleep(0.3);
     return jsonify({'message': 'Answer recorded'})
 
 @app.route('/prompt_username')
