@@ -221,7 +221,7 @@ def submit_answer():
 
     data = request.json
     question_id = data.get('question_id')
-    user_answer = data.get('answer')
+    user_answers[str(question_id)] = user_answer
     print(f"submit_answer() received question_id={question_id}, user_answer={user_answer}")
 
     user_answers = session.get('user_answers', {})
@@ -251,9 +251,9 @@ def finish_quiz():
     score = 0
 
     for q in quiz_questions:
-        qid = q['id']
+        qid_str = str(q['id'])
+        user_ans = user_answers.get(qid_str, '')
         correct_ans = q['correct_answer'].strip().lower()
-        user_ans = user_answers.get(qid, '').strip().lower()
         difficulty = q['difficulty'].strip().lower()
 
         print(f"QID={qid}, correct_ans={correct_ans}, user_ans={user_ans}, diff={difficulty}")
