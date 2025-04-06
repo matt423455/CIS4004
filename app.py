@@ -237,6 +237,8 @@ def finish_quiz():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
+    user_id = session['user_id']
+
     quiz_questions = session.get('quiz_questions', [])
     user_answers = session.get('user_answers', {})
 
