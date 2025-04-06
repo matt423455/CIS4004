@@ -300,14 +300,14 @@ def finish_quiz():
         """, (user_id, "mixed", "mixed", score))
 
         # Update highscore if needed
-        cursor.execute("SELECT highscore FROM users WHERE id = %s", (user_id,))
+        cursor.execute("SELECT high_score FROM users WHERE id = %s", (user_id,))
         row = cursor.fetchone()
         current_highscore = row[0] if row else 0
 
         if score > current_highscore:
             cursor.execute("""
                 UPDATE users
-                SET highscore = %s
+                SET high_score = %s
                 WHERE id = %s
             """, (score, user_id))
 
@@ -341,7 +341,7 @@ def dashboard():
 
         # user info
         cursor.execute("""
-            SELECT username, email, highscore
+            SELECT username, email, high_score
             FROM users
             WHERE id = %s
         """, (user_id,))
