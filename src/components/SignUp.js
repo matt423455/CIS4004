@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import '../styles/SignUp.css'; 
-
 const SignUp = ({ onBackToLogin }) => {
   const [formData, setFormData] = useState({
     firstName: '',
@@ -83,6 +82,9 @@ const SignUp = ({ onBackToLogin }) => {
   return (
     <div className="signup-container">
       <div className="form-header">
+        <button className="close-button" onClick={onBackToLogin}>
+          ×
+        </button>
         <h2 className="form-title">Create Account</h2>
         <p className="form-subtitle">Join Paradise Trivia today</p>
       </div>
@@ -168,18 +170,13 @@ const SignUp = ({ onBackToLogin }) => {
           {errors.confirmPassword && <div className="error-text">{errors.confirmPassword}</div>}
         </div>
         
-        <p className="terms-text">
-          By creating an account, you agree to our <a href="#" className="terms-link">Terms of Service</a> and <a href="#" className="terms-link">Privacy Policy</a>
-        </p>
         
         <button type="submit" className="signup-button">
           Create Account
         </button>
       </form>
       
-      <a href="#" onClick={onBackToLogin} className="back-link">
-        Already have an account? Log in
-      </a>
+      
     </div>
   );
 };
