@@ -289,6 +289,71 @@ def set_username():
     # Now redirect to main page
     return redirect(url_for('index'))
 
+@app.route('/get_stats', methods=['GET'])
+def get_stats():
+    """
+    Return the current user's stats (high score, total games played, average score, etc.)
+    and also the global leaderboard (top 5 or 10).
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    user_id = session['user_id']
+    stats = {}
+    leaderboard = []
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # 1) Fetch the current user's stats
+        #    - Their high_score in `users`
+        #    - total games played
+        #    - average score from `game_history` if you'd like
+        cursor.execute("""
+            SELECT high_score
+            FROM users
+            WHERE id = %s
+        """, (user_id,))
+        row = cursor.fetchone()
+
+        user_high_score = row['high_score'] if row else 0
+
+        # total games played by user
+        cursor.execute("""
+            SELECT COUNT(*) as total_games, AVG(score) as avg_score
+            FROM game_history
+            WHERE user_id = %s
+        """, (user_id,))
+        row = cursor.fetchone()
+        total_games = row['total_games'] if row['total_games'] else 0
+        avg_score   = row['avg_score'] if row['avg_score'] else 0
+
+        stats['high_score'] = user_high_score
+        stats['total_games'] = total_games
+        stats['avg_score'] = round(avg_score, 2)  # round to 2 decimals if you like
+
+        # 2) Get the top 5 or 10 players from the database by high_score
+        cursor.execute("""
+            SELECT username, high_score
+            FROM users
+            WHERE username <> ''
+            ORDER BY high_score DESC
+            LIMIT 5
+        """)
+        leaderboard_rows = cursor.fetchall()
+        leaderboard = leaderboard_rows  # each row has { 'username':..., 'high_score':... }
+
+    except mysql.connector.Error as err:
+        return jsonify({'error': f"Database error: {str(err)}"}), 400
+    finally:
+        cursor.close()
+        conn.close()
+
+    return jsonify({
+        'user_stats': stats,
+        'leaderboard': leaderboard
+    })
 
 @app.route('/finish_quiz', methods=['POST'])
 def finish_quiz():
