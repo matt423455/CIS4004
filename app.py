@@ -216,20 +216,29 @@ def get_question():
 
 @app.route('/submit_answer', methods=['POST'])
 def submit_answer():
+def submit_answer():
     if 'user_id' not in session:
+        # or return a JSON error if you prefer
         return redirect(url_for('login'))
 
     data = request.json
     question_id = data.get('question_id')
-    user_answers[str(question_id)] = user_answer
-    print(f"submit_answer() received question_id={question_id}, user_answer={user_answer}")
+    user_answer = data.get('answer')  # <-- define it here
 
+    # get the existing dictionary from session or empty if none
     user_answers = session.get('user_answers', {})
-    user_answers[question_id] = user_answer
+
+    # store the answer under the string key
+    user_answers[str(question_id)] = user_answer
+
+    # update session
     session['user_answers'] = user_answers
 
     session['current_question_index'] += 1
+
+    print(f"submit_answer() => question_id={question_id}, user_answer={user_answer}")
     return jsonify({'message': 'Answer recorded'})
+
 
 
 @app.route('/finish_quiz', methods=['POST'])
