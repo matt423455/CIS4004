@@ -264,7 +264,7 @@ def finish_quiz():
         correct_ans = q['correct_answer'].strip().lower()
         difficulty = q['difficulty'].strip().lower()
 
-        print(f"QID={qid}, correct_ans={correct_ans}, user_ans={user_ans}, diff={difficulty}")
+        print(f"QID={qid_str}, correct_ans={correct_ans}, user_ans={user_ans}, diff={difficulty}")
 
         if difficulty == 'easy':
             weight = 100
