@@ -8,7 +8,7 @@ import time
 
 app = Flask(__name__)
 app.secret_key = '17344d5039b0c598f2bdc9f866a500a0'  # Replace with a secure secret key
-CORS(app)
+CORS(app, supports_credentials=True)
 
 # --- Database configuration ---
 db_config = {
