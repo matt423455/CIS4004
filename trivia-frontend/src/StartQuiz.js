@@ -1,6 +1,9 @@
 // src/StartQuiz.js
 import React, { useState, useEffect, useRef } from 'react';
+<<<<<<< HEAD
 import './StartQuiz.css'; 
+=======
+>>>>>>> 38e5beae04dc13a02a15ccb63a72842ce9499498
 
 function StartQuiz({ username }) {
     const [userStats, setUserStats] = useState({
