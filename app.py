@@ -32,7 +32,6 @@ msal_app = msal.ConfidentialClientApplication(
     client_credential=client_secret
 )
 
-
 @app.route('/')
 def index():
     """
@@ -41,8 +40,10 @@ def index():
     """
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    return render_template('start_quiz.html')
 
+    the_username = session.get('username', 'UnknownUser')
+
+    return render_template('start_quiz.html', username=the_username)
 
 @app.route('/login')
 def login():
@@ -51,70 +52,75 @@ def login():
     """
     return redirect(url_for('getAToken'))
 
-
 @app.route('/getAToken')
 def getAToken():
-    """
-    1) If there's no "code", redirect to Microsoft sign-in
-    2) Otherwise, exchange the code for an access token,
-       create or find user in DB, store user_id in session,
-       and redirect back to '/' to show start_quiz.html
-    """
     code = request.args.get('code')
     if not code:
         # Step 1: No code => redirect to Microsoft login
         auth_url = msal_app.get_authorization_request_url(
-            scope, 
+            scope,
             redirect_uri=redirect_uri
         )
         return redirect(auth_url)
 
     # Step 2: We got the code => exchange for token
     result = msal_app.acquire_token_by_authorization_code(
-        code, 
-        scopes=scope, 
+        code,
+        scopes=scope,
         redirect_uri=redirect_uri
     )
     if 'access_token' in result:
         id_token_claims = result.get('id_token_claims', {})
         email = id_token_claims.get('preferred_username') or id_token_claims.get('email')
-        username = id_token_claims.get('name') or email
+
+        # 'name' from Microsoft SSO claims:
+        real_name = id_token_claims.get('name') or email
 
         if not email:
             return "Error: No email found in token claims", 400
-        
+
         try:
             conn = mysql.connector.connect(**db_config)
             cursor = conn.cursor()
             # Check if user exists:
-            cursor.execute("SELECT id FROM users WHERE email = %s", (email,))
+            cursor.execute("SELECT id, username FROM users WHERE email = %s", (email,))
             row = cursor.fetchone()
+
             if row:
                 user_id = row[0]
+                existing_username = row[1]
             else:
-                # Insert new user
+                # Insert new user with name from SSO, username is blank initially
                 default_password = generate_password_hash("defaultpassword")
                 insert_query = """
-                    INSERT INTO users (username, email, password)
-                    VALUES (%s, %s, %s)
+                    INSERT INTO users (name, email, password, username)
+                    VALUES (%s, %s, %s, %s)
                 """
-                cursor.execute(insert_query, (username, email, default_password))
+                # name=real_name, email, password=default, username='' for now
+                cursor.execute(insert_query, (real_name, email, default_password, ''))
                 conn.commit()
                 user_id = cursor.lastrowid
-            
-            # Store user in session
+                existing_username = ''
+
+            # Store user_id in session
             session['user_id'] = user_id
+            # Also store the user's current "username" in session for convenience
+            session['username'] = existing_username
+
         except mysql.connector.Error as err:
             return f"Database error: {str(err)}", 400
         finally:
             cursor.close()
             conn.close()
-        
-        # After successful login, redirect home -> loads start_quiz.html
-        return redirect(url_for('index'))
+
+        # After successful login, redirect...
+        #   If they don't have a username yet, prompt them.
+        if not existing_username:
+            return redirect(url_for('prompt_username'))
+        else:
+            return redirect(url_for('index'))
     else:
         return f"Token acquisition failed: {result.get('error_description', '')}", 400
-
 
 # ============================
 #   Single-Question-At-A-Time
@@ -131,7 +137,7 @@ def start_quiz():
     """
     if 'user_id' not in session:
         return redirect(url_for('login'))
-    
+
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor(dictionary=True)
@@ -186,7 +192,6 @@ def start_quiz():
         'total_questions': len(questions_db)
     })
 
-
 @app.route('/get_question', methods=['GET'])
 def get_question():
     """
@@ -213,30 +218,141 @@ def get_question():
         'difficulty': q['difficulty']
     })
 
-
 @app.route('/submit_answer', methods=['POST'])
 def submit_answer():
     if 'user_id' not in session:
+        # or return a JSON error if you prefer
         return redirect(url_for('login'))
 
     data = request.json
     question_id = data.get('question_id')
     user_answer = data.get('answer')
-    print(f"submit_answer() received question_id={question_id}, user_answer={user_answer}")
 
+    # get the existing dictionary from session or empty if none
     user_answers = session.get('user_answers', {})
-    user_answers[question_id] = user_answer
-    session['user_answers'] = user_answers
 
+    # store the answer under the string key
+    user_answers[str(question_id)] = user_answer
+
+    # update session
+    session['user_answers'] = user_answers
     session['current_question_index'] += 1
+
+    print(f"submit_answer() => question_id={question_id}, user_answer={user_answer}")
     return jsonify({'message': 'Answer recorded'})
 
+@app.route('/prompt_username')
+def prompt_username():
+    """
+    Simple route to render an HTML form so user can pick a username
+    if they don't already have one.
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    return render_template('choose_username.html')
+
+@app.route('/set_username', methods=['POST'])
+def set_username():
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    user_id = session['user_id']
+    chosen_username = request.form.get('username', '').strip()
+
+    if not chosen_username:
+        return "Username cannot be blank", 400
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor()
+        # Update the existing user record:
+        cursor.execute("""
+            UPDATE users
+            SET username = %s
+            WHERE id = %s
+        """, (chosen_username, user_id))
+        conn.commit()
+    except mysql.connector.Error as err:
+        return f"Database error: {str(err)}", 400
+    finally:
+        cursor.close()
+        conn.close()
+
+    # Store in session for convenience
+    session['username'] = chosen_username
+
+    # Now redirect to main page
+    return redirect(url_for('index'))
+
+@app.route('/get_stats', methods=['GET'])
+def get_stats():
+    """
+    Return the current user's stats (high score, total games played, average score, etc.)
+    and also the global leaderboard (top 5 or top 10).
+    """
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+
+    user_id = session['user_id']
+    stats = {}
+    leaderboard = []
+
+    try:
+        conn = mysql.connector.connect(**db_config)
+        cursor = conn.cursor(dictionary=True)
+
+        # 1) Fetch the current user's stats
+        cursor.execute("""
+            SELECT high_score
+            FROM users
+            WHERE id = %s
+        """, (user_id,))
+        row = cursor.fetchone()
+
+        user_high_score = row['high_score'] if row else 0
+
+        # total games played
+        cursor.execute("""
+            SELECT COUNT(*) as total_games, AVG(score) as avg_score
+            FROM game_history
+            WHERE user_id = %s
+        """, (user_id,))
+        row = cursor.fetchone()
+        total_games = row['total_games'] if row['total_games'] else 0
+        avg_score = row['avg_score'] if row['avg_score'] else 0
+
+        stats['high_score'] = user_high_score
+        stats['total_games'] = total_games
+        stats['avg_score'] = round(avg_score, 2)
+
+        # 2) Leaderboard - top 5
+        cursor.execute("""
+            SELECT username, high_score
+            FROM users
+            WHERE username <> ''
+            ORDER BY high_score DESC
+            LIMIT 5
+        """)
+        leaderboard_rows = cursor.fetchall()
+        leaderboard = leaderboard_rows
+
+    except mysql.connector.Error as err:
+        return jsonify({'error': f"Database error: {str(err)}"}), 400
+    finally:
+        cursor.close()
+        conn.close()
+
+    return jsonify({
+        'user_stats': stats,
+        'leaderboard': leaderboard
+    })
 
 @app.route('/finish_quiz', methods=['POST'])
 def finish_quiz():
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
+    user_id = session['user_id']
     quiz_questions = session.get('quiz_questions', [])
     user_answers = session.get('user_answers', {})
 
@@ -249,12 +365,12 @@ def finish_quiz():
     score = 0
 
     for q in quiz_questions:
-        qid = q['id']
+        qid_str = str(q['id'])
+        user_ans = user_answers.get(qid_str, '').strip().lower()
         correct_ans = q['correct_answer'].strip().lower()
-        user_ans = user_answers.get(qid, '').strip().lower()
         difficulty = q['difficulty'].strip().lower()
 
-        print(f"QID={qid}, correct_ans={correct_ans}, user_ans={user_ans}, diff={difficulty}")
+        print(f"QID={qid_str}, correct_ans={correct_ans}, user_ans={user_ans}, diff={difficulty}")
 
         if difficulty == 'easy':
             weight = 100
@@ -275,16 +391,15 @@ def finish_quiz():
         else:
             print(" -> user_ans not valid (not 'true'/'false'?), skipping")
 
-    print(f"Finished loop: correct={correct_count}, wrong={wrong_count}, score={score}")
+    score = max(score, 0)
 
-        # if user never answered or invalid => no penalty
+    print(f"Finished loop: correct={correct_count}, wrong={wrong_count}, score={score}")
 
     # Clear session quiz data
     session.pop('quiz_questions', None)
     session.pop('current_question_index', None)
     session.pop('user_answers', None)
 
-    # Insert game result
     try:
         conn = mysql.connector.connect(**db_config)
         cursor = conn.cursor()
@@ -294,7 +409,7 @@ def finish_quiz():
             VALUES (%s, %s, %s, %s, NOW())
         """, (user_id, "mixed", "mixed", score))
 
-        # Update highscore if needed
+        # Update high score if needed
         cursor.execute("SELECT high_score FROM users WHERE id = %s", (user_id,))
         row = cursor.fetchone()
         current_highscore = row[0] if row else 0
@@ -319,51 +434,6 @@ def finish_quiz():
         'correct_count': correct_count,
         'wrong_count': wrong_count
     })
-
-
-@app.route('/dashboard')
-def dashboard():
-    """
-    Show user info & last 20 game results
-    """
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    
-    user_id = session['user_id']
-    try:
-        conn = mysql.connector.connect(**db_config)
-        cursor = conn.cursor()
-
-        # user info
-        cursor.execute("""
-            SELECT username, email, high_score
-            FROM users
-            WHERE id = %s
-        """, (user_id,))
-        user_info = cursor.fetchone()  # (username, email, highscore)
-
-        # last 20 games
-        cursor.execute("""
-            SELECT category, difficulty, score, timestamp
-            FROM game_history
-            WHERE user_id = %s
-            ORDER BY timestamp DESC
-            LIMIT 20
-        """, (user_id,))
-        history = cursor.fetchall()
-
-    except mysql.connector.Error as err:
-        return f"Database error: {str(err)}", 400
-    finally:
-        cursor.close()
-        conn.close()
-
-    return render_template(
-        "dashboard.html",
-        user=user_info,
-        history=history
-    )
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
