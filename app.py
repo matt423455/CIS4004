@@ -37,6 +37,19 @@ msal_app = msal.ConfidentialClientApplication(
 #   AUTH & LOGIN
 ###########################
 
+@app.route('/')
+def index():
+    """
+    If logged in, show start_quiz.html
+    If not, redirect to /login
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+
+    the_username = session.get('username', 'UnknownUser')
+
+    return render_template('start_quiz.html', username=the_username)
+
 @app.route('/login')
 def login():
     """
@@ -375,22 +388,6 @@ def finish_quiz():
         'correct_count': correct_count,
         'wrong_count': wrong_count
     })
-
-
-###########################
-#  Catch-all for React
-###########################
-
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve_react_frontend(path):
-    # If the file exists in build/ serve it,
-    # else serve build/index.html (React front-end).
-    if path != "" and os.path.exists(os.path.join("build", path)):
-        return send_from_directory("build", path)
-    else:
-        return send_from_directory("build", "index.html")
-
 
 # Finally, run the app:
 if __name__ == '__main__':
