@@ -48,7 +48,7 @@ def index():
 
     the_username = session.get('username', 'UnknownUser')
 
-    return render_template('templates/start_quiz.html', username=the_username)
+    return render_template('start_quiz.html', username=the_username)
 
 @app.route('/login')
 def login():
@@ -78,6 +78,8 @@ def getAToken():
     if 'access_token' in result:
         id_token_claims = result.get('id_token_claims', {})
         email = id_token_claims.get('preferred_username') or id_token_claims.get('email')
+
+        # 'name' from Microsoft SSO claims:
         real_name = id_token_claims.get('name') or email
 
         if not email:
@@ -94,18 +96,21 @@ def getAToken():
                 user_id = row[0]
                 existing_username = row[1]
             else:
-                # Insert new user
+                # Insert new user with name from SSO, username is blank initially
                 default_password = generate_password_hash("defaultpassword")
                 insert_query = """
                     INSERT INTO users (name, email, password, username)
                     VALUES (%s, %s, %s, %s)
                 """
+                # name=real_name, email, password=default, username='' for now
                 cursor.execute(insert_query, (real_name, email, default_password, ''))
                 conn.commit()
                 user_id = cursor.lastrowid
                 existing_username = ''
 
+            # Store user_id in session
             session['user_id'] = user_id
+            # Also store the user's current "username" in session for convenience
             session['username'] = existing_username
 
         except mysql.connector.Error as err:
@@ -114,12 +119,24 @@ def getAToken():
             cursor.close()
             conn.close()
 
-        # If they don't have a username yet -> let React handle prompting
-        #   e.g. it can detect an empty username in /get_stats
-        return redirect('/')  # This sends them back to the React app, which can call /get_stats, etc.
+        # After successful login, redirect...
+        #   If they don't have a username yet, prompt them.
+        if not existing_username:
+            return redirect(url_for('prompt_username'))
+        else:
+            return redirect(url_for('index'))
     else:
         return f"Token acquisition failed: {result.get('error_description', '')}", 400
 
+@app.route('/prompt_username')
+def prompt_username():
+    """
+    Simple route to render an HTML form so user can pick a username
+    if they don't already have one.
+    """
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+    return render_template('choose_username.html')
 
 ###########################
 #   JSON ENDPOINTS
