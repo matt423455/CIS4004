@@ -1,4 +1,4 @@
-from flask import Flask, request, session, redirect, url_for, jsonify, send_from_directory
+from flask import Flask, request, session, redirect, url_for, jsonify, send_from_directory, render_template
 from flask_cors import CORS
 import mysql.connector
 from werkzeug.security import generate_password_hash
