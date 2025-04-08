@@ -23,7 +23,7 @@ db_config = {
 client_id     = '4252cb8e-b486-475c-9163-5e0b679e47ea'
 client_secret = '~d38Q~SpLtT-Tl4IBhfLR_HqNpqdkym6FUjZlcK.'
 tenant_id     = '5ba7dd49-7ac9-4955-b136-4f6f3b6d4709'
-authority     = f'https://login.microsoftonline.com/{tenant_id}'
+authority = 'https://login.microsoftonline.com/common'
 redirect_uri  = 'https://www.triviaparadise.online/getAToken'
 scope         = ['User.Read']
 
