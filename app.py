@@ -48,7 +48,7 @@ def index():
 
     the_username = session.get('username', 'UnknownUser')
 
-    return render_template('start_quiz.html', username=the_username)
+    return render_template('templates/start_quiz.html', username=the_username)
 
 @app.route('/login')
 def login():
