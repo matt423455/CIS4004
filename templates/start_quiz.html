@@ -38,11 +38,17 @@
     <button id="startBtn" onclick="startQuiz()">Start Quiz</button>
 
     <!-- 4) Quiz Area (hidden at first) -->
-    <div id="quizArea" style="display: none;">
-        <h2>Time Left: <span id="timer">60</span> seconds</h2>
-        <p id="questionContainer"></p>
-        <button id="trueBtn" style="display: none;" onclick="submitAnswer('True')">True</button>
-        <button id="falseBtn" style="display: none;" onclick="submitAnswer('False')">False</button>
+    <div id="quizModal">
+        <div class="modal-content">
+            <!-- Optional close button; you can remove it if you want the quiz to run without manual cancellation -->
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <div id="quizArea">
+                <h2>Time Left: <span id="timer">60</span> seconds</h2>
+                <p id="questionContainer"></p>
+                <button id="trueBtn" style="display: none;" onclick="submitAnswer('True')">True</button>
+                <button id="falseBtn" style="display: none;" onclick="submitAnswer('False')">False</button>
+            </div>
+        </div>
     </div>
 
     <!-- 5) Results Area (hidden initially) -->
@@ -104,17 +110,14 @@
                 .then(res => res.json())
                 .then(data => {
                     console.log("Quiz started:", data);
-
-                    // Hide the start button, show the quiz area, hide result area
+                    // Hide the Start Quiz button and show the quiz modal
                     document.getElementById('startBtn').style.display = 'none';
-                    document.getElementById('quizArea').style.display = 'block';
-                    document.getElementById('resultArea').style.display = 'none';
+                    document.getElementById('quizModal').style.display = 'block';
 
-                    // Reset timer to 60 seconds and start counting down
+                    // Reset timer to 60 seconds and start countdown
                     timeLeft = 60;
                     document.getElementById('timer').textContent = timeLeft;
                     if (timerId) clearInterval(timerId);
-
                     timerId = setInterval(() => {
                         timeLeft--;
                         document.getElementById('timer').textContent = timeLeft;
@@ -127,6 +130,12 @@
                     loadQuestion();
                 })
                 .catch(err => console.error("Error starting quiz:", err));
+        }
+
+        function closeModal() {
+            // Stop timer if any
+            if (timerId) clearInterval(timerId);
+            document.getElementById('quizModal').style.display = 'none';
         }
 
         // -------------------------
@@ -186,26 +195,20 @@
         //  Finish quiz early or time's up
         // --------------------------------
         function finishQuiz() {
-            // Stop timer
             if (timerId) clearInterval(timerId);
-
             fetch('/finish_quiz', { method: 'POST' })
                 .then(res => res.json())
                 .then(result => {
                     console.log("Quiz finished:", result);
 
-                    // Hide quiz, show results
-                    document.getElementById('quizArea').style.display = 'none';
+                    document.getElementById('quizModal').style.display = 'none';
                     document.getElementById('resultArea').style.display = 'block';
-
                     document.getElementById('scoreText').textContent = "Final Score: " + result.score;
                     document.getElementById('correctText').textContent = "Correct: " + result.correct_count;
                     document.getElementById('wrongText').textContent = "Wrong: " + result.wrong_count;
 
-                    // Refresh stats & leaderboard to see updated results
                     fetchStats();
 
-                    // If you want to show the Start Quiz button again:
                     document.getElementById('startBtn').style.display = 'inline';
                 })
                 .catch(err => console.error("Error finishing quiz:", err));
