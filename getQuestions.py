@@ -5,7 +5,8 @@ db_config = {
     'host': 'localhost',
     'user': 'HOLDER',
     'password': 'Cookie123',
-    'database': 'QuizGame'
+    'database': 'QuizGame',
+    'ssl_disabled': True  # Disable SSL encryption
 }
 
 conn = mysql.connector.connect(**db_config)
