@@ -38,26 +38,27 @@
     <button id="startBtn" onclick="startQuiz()">Start Quiz</button>
 
     <!-- 4) Quiz Area (hidden at first) -->
-    <div id="quizModal">
-        <div class="modal-content">
-            <!-- Optional close button; you can remove it if you want the quiz to run without manual cancellation -->
-            <span class="close-modal" onclick="closeModal()">&times;</span>
-            <div id="quizArea">
-                <h2>Time Left: <span id="timer">60</span> seconds</h2>
-                <p id="questionContainer"></p>
-                <button id="trueBtn" style="display: none;" onclick="submitAnswer('True')">True</button>
-                <button id="falseBtn" style="display: none;" onclick="submitAnswer('False')">False</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 5) Results Area (hidden initially) -->
-    <div id="resultArea" style="display: none;">
+  <div id="quizModal">
+    <div class="modal-content">
+      <!-- Quiz content section -->
+      <div id="quizContent">
+        <h2>Time Left: <span id="timer">60</span> seconds</h2>
+        <p id="questionContainer"></p>
+        <button id="trueBtn" style="display: none;" onclick="submitAnswer('True')">True</button>
+        <button id="falseBtn" style="display: none;" onclick="submitAnswer('False')">False</button>
+      </div>
+      <!-- Results content section (hidden until quiz finished) -->
+      <div id="resultArea" style="display: none;">
         <h2>Quiz Results</h2>
         <p id="scoreText"></p>
         <p id="correctText"></p>
         <p id="wrongText"></p>
+        <!-- Retry and Close buttons using shared button style -->
+        <button id="retryBtn" class="btn" onclick="retryQuiz()">Retry</button>
+        <button id="closeBtn" class="btn" onclick="closeModal()">Close</button>
+      </div>
     </div>
+  </div>
 
     <script>
         let timerId = null;
@@ -113,6 +114,8 @@
                     // Hide the Start Quiz button and show the quiz modal
                     document.getElementById('startBtn').style.display = 'none';
                     document.getElementById('quizModal').style.display = 'block';
+                    document.getElementById('quizContent').style.display = 'block';
+                    document.getElementById('resultArea').style.display = 'none';
 
                     // Reset timer to 60 seconds and start countdown
                     timeLeft = 60;
@@ -133,9 +136,10 @@
         }
 
         function closeModal() {
-            // Stop timer if any
             if (timerId) clearInterval(timerId);
             document.getElementById('quizModal').style.display = 'none';
+            document.getElementById('startBtn').style.display = 'inline';
+
         }
 
         // -------------------------
@@ -212,6 +216,10 @@
                     document.getElementById('startBtn').style.display = 'inline';
                 })
                 .catch(err => console.error("Error finishing quiz:", err));
+        }
+
+        function retryQuiz() {
+            startQuiz();
         }
     </script>
 </body>
