@@ -486,6 +486,7 @@ hr {
     max-width: none;
     margin: 0;
     padding: 0;
+    display: 'none';
     border: none;
     border-radius: 0;
     width: 100%;
