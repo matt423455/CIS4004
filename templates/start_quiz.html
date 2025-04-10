@@ -205,15 +205,13 @@
                 .then(result => {
                     console.log("Quiz finished:", result);
 
-                    document.getElementById('quizModal').style.display = 'none';
+                    document.getElementById('quizContent').style.display = 'none';
                     document.getElementById('resultArea').style.display = 'block';
                     document.getElementById('scoreText').textContent = "Final Score: " + result.score;
                     document.getElementById('correctText').textContent = "Correct: " + result.correct_count;
                     document.getElementById('wrongText').textContent = "Wrong: " + result.wrong_count;
 
                     fetchStats();
-
-                    document.getElementById('startBtn').style.display = 'inline';
                 })
                 .catch(err => console.error("Error finishing quiz:", err));
         }
