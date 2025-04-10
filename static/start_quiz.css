@@ -78,15 +78,15 @@ body {
 }
 
 /* Main content container */
-body > *:not(script) {
-  max-width: 800px;
-  margin: 0 auto 2rem;
-  background-color: var(--white);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  padding: 2rem;
-  position: relative;
-  overflow: hidden;
+body > *:not(script):not(#quizModal) {
+    max-width: 800px;
+    margin: 0 auto 2rem;
+    background-color: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+    padding: 2rem;
+    position: relative;
+    overflow: hidden;
 }
 
 /* Page title */
