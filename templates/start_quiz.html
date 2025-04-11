@@ -6,8 +6,11 @@
     <link rel ="stylesheet" href="../static/start_quiz.css"> 
 </head>
 <body onload="fetchStats()">
-    <h1>Welcome to Trivia Paradise, {{ username }}!</h1>
-
+    <div id="headerArea">
+        <h1>Welcome to Trivia Paradise, {{ username }}!</h1>
+        <!-- Logout button; you can style it as needed -->
+        <button id="logoutBtn" onclick="window.location.href='/logout'">Logout</button>
+    </div>
     <!-- 1) User Stats -->
     <div id="userStatsArea">
         <h3>Your Stats</h3>
@@ -38,27 +41,27 @@
     <button id="startBtn" onclick="startQuiz()">Start Quiz</button>
 
     <!-- 4) Quiz Area (hidden at first) -->
-  <div id="quizModal">
-    <div class="modal-content">
-      <!-- Quiz content section -->
-      <div id="quizContent">
-        <h2>Time Left: <span id="timer">60</span> seconds</h2>
-        <p id="questionContainer"></p>
-        <button id="trueBtn" style="display: none;" onclick="submitAnswer('True')">True</button>
-        <button id="falseBtn" style="display: none;" onclick="submitAnswer('False')">False</button>
-      </div>
-      <!-- Results content section (hidden until quiz finished) -->
-      <div id="resultArea" style="display: none;">
-        <h2>Quiz Results</h2>
-        <p id="scoreText"></p>
-        <p id="correctText"></p>
-        <p id="wrongText"></p>
-        <!-- Retry and Close buttons using shared button style -->
-        <button id="retryBtn" class="btn" onclick="retryQuiz()">Retry</button>
-        <button id="closeBtn" class="btn" onclick="closeModal()">Close</button>
-      </div>
+    <div id="quizModal">
+        <div class="modal-content">
+            <!-- Quiz content section -->
+            <div id="quizContent">
+                <h2>Time Left: <span id="timer">60</span> seconds</h2>
+                <p id="questionContainer"></p>
+                <button id="trueBtn" style="display: none;" onclick="submitAnswer('True')">True</button>
+                <button id="falseBtn" style="display: none;" onclick="submitAnswer('False')">False</button>
+            </div>
+            <!-- Results content section (hidden until quiz finished) -->
+            <div id="resultArea" style="display: none;">
+                <h2>Quiz Results</h2>
+                <p id="scoreText"></p>
+                <p id="correctText"></p>
+                <p id="wrongText"></p>
+                <!-- Retry and Close buttons using shared button style -->
+                <button id="retryBtn" class="btn" onclick="retryQuiz()">Retry</button>
+                <button id="closeBtn" class="btn" onclick="closeModal()">Close</button>
+            </div>
+        </div>
     </div>
-  </div>
 
     <script>
         let timerId = null;

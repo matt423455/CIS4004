@@ -58,6 +58,11 @@ def login():
     """
     return redirect(url_for('getAToken'))
 
+@app.route('/logout')
+def logout():
+    session.clear() 
+    return redirect(url_for('login'))
+
 @app.route('/getAToken')
 def getAToken():
     code = request.args.get('code')
