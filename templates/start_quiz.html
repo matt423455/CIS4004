@@ -8,7 +8,7 @@
 <body onload="fetchStats()">
     <div id="headerArea">
         <h1>Welcome to Trivia Paradise, {{ username }}!</h1>
-        <!-- Logout button; you can style it as needed -->
+        <button id="startBtn" onclick="startQuiz()">Start Quiz</button>
         <button id="startBtn" onclick="window.location.href='/logout'">Logout</button>
     </div>
     <!-- 1) User Stats -->
@@ -36,9 +36,6 @@
         </table>
     </div>
     <hr>
-
-    <!-- 3) Start Quiz Button -->
-    <button id="startBtn" onclick="startQuiz()">Start Quiz</button>
 
     <!-- 4) Quiz Area (hidden at first) -->
     <div id="quizModal">
