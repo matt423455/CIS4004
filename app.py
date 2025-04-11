@@ -334,7 +334,7 @@ def set_username():
         conn.close()
 
     session['username'] = chosen_username
-    return jsonify({'message': 'Username updated successfully'})
+    return redirect(url_for('index'))
 
 @app.route('/finish_quiz', methods=['POST'])
 def finish_quiz():
