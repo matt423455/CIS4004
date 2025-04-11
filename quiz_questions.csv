@@ -41,7 +41,7 @@ boolean,medium,General Knowledge,The US emergency hotline is 911 because of the 
 boolean,medium,General Knowledge,Francis Bacon died from a fatal case of pneumonia while he was attempting to preserve meat by stuffing a chicken with snow.,True
 boolean,easy,General Knowledge,The Sun rises from the North.,False
 boolean,easy,General Knowledge,"In 2010, Twitter and the United States Library of Congress partnered together to archive every tweet by American citizens.",True
-boolean,hard,General Knowledge,NCIS stands for "Navy Corps Investigative Service",False
+boolean,hard,General Knowledge,NCIS stands for ""Navy Corps Investigative Service"",False
 boolean,easy,General Knowledge,"""27 Club"" is a term used to refer to a list of famous actors, musicians, and artists who died at the age of 27.",True
 boolean,easy,General Knowledge,Bulls are attracted to the color red.,False
 boolean,medium,General Knowledge,Instant mashed potatoes were invented by Canadian Edward Asselbergs in 1962.,True
