@@ -27,6 +27,6 @@ All styles are maintained within two main stylesheets:
 There is **no installation required** to run this application. Simply:
 
 1. Visit the site: [https://www.triviaparadise.online/](https://www.triviaparadise.online/)
-2. Click the start button.
-3. Sign in using your **Microsoft account**.
+2. Sign in using your **Microsoft account**.
+3. Click the start button.
 4. Begin your trivia experience immediately.
