@@ -60,8 +60,12 @@ def login():
 
 @app.route('/logout')
 def logout():
-    session.clear() 
-    return redirect(url_for('login'))
+    session.clear()
+    ms_logout_url = (
+        "https://login.microsoftonline.com/common/oauth2/v2.0/logout"
+        "?post_logout_redirect_uri=" + url_for('login', _external=True)
+    )
+    return redirect(ms_logout_url)
 
 @app.route('/getAToken')
 def getAToken():
