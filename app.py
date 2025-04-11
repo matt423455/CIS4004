@@ -71,10 +71,10 @@ def logout():
 def getAToken():
     code = request.args.get('code')
     if not code:
-        # Step 1: No code => redirect to Microsoft login
         auth_url = msal_app.get_authorization_request_url(
             scope,
-            redirect_uri=redirect_uri
+            redirect_uri=redirect_uri,
+            prompt='select_account'
         )
         return redirect(auth_url)
 
