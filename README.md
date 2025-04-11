@@ -6,7 +6,7 @@ Trivia Paradise is an interactive, web-based quiz platform designed to test know
 
 ## Styling and Design 
 
-The Css used within the application blends vibrant color gradients in animated transitions. Along with that, the site also contains subtale UI details to enhance the overall user experience.
+The CSS used within the application blends vibrant color gradients in animated transitions. Along with that, the site also contains subtale UI details to enhance the overall user experience.
 
 - Portions of the projected were supported with the use of **Claude AI**, which we used as a collaborative and learning tool througohut the design phase. We mainly leveraged **Claude AI** for: 
   - Protoyping the animation structures, such as the gradient backgrounds.
