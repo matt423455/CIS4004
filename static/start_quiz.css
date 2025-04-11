@@ -575,6 +575,12 @@ hr {
   transform: rotate(180deg);
 }
 
+#btnContainer {
+    display: flex;
+    gap: 1rem; /* Adjust spacing between buttons */
+    margin-top: 1rem; /* Optional: add vertical spacing */
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   html {

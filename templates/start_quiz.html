@@ -8,8 +8,10 @@
 <body onload="fetchStats()">
     <div id="headerArea">
         <h1>Welcome to Trivia Paradise, {{ username }}!</h1>
-        <button id="startBtn" onclick="startQuiz()">Start Quiz</button>
-        <button id="startBtn" onclick="window.location.href='/logout'">Logout</button>
+        <div id="btnContainer"
+            <button id="startBtn" onclick="startQuiz()">Start Quiz</button>
+            <button id="startBtn" onclick="window.location.href='/logout'">Logout</button>
+        </div>
     </div>
     <!-- 1) User Stats -->
     <div id="userStatsArea">
