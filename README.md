@@ -18,7 +18,7 @@ The CSS used within the application blends vibrant color gradients in animated t
   - Contextual styling: modal positioning, leaderboard behavior, score display logic, and interactive transitions were all hand-tailored to match gameplay dynamics and narrative flow.
   - Design consistency and scaling: Colors were rebalanced for visual clarity and contrast, gradients were refined for smoother transitions, and spacing was tuned across all screen sizes for a uniform experience.
 
-All styles are maintained within two main stylesheets:
+All stylesheets are maintained within the static folder:
 - `choose_username.css`
 - `start_quiz.css`
 
